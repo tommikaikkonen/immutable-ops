@@ -1,0 +1,9 @@
+node_modules
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+lib
+.publish
+dist
+min
+*.log
