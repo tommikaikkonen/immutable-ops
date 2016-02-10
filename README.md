@@ -5,7 +5,7 @@ A collection of functions to perform immutable operations on plain JavaScript ob
 
 ## Features
 
-- Small. It's just 11 functions.
+- Small. It's just 10 functions.
 - Functional API with curried functions
 - JavaScript in, JavaScript out
 - Batched mutations
@@ -20,7 +20,7 @@ npm install immutable-ops
 
 ```javascript
 import compose from 'ramda/src/compose';
-import getImmutableFns from 'immutable-functions';
+import getImmutableOps from 'immutable-ops';
 
 // These are all the available functions.
 const {
@@ -119,7 +119,7 @@ When the function finishes executing, `immutable-ops` loops through the `mutated
 
 ## Currying
 
-All operations are curried by default. If you don't want them to be curried, pass `{ curried: false }` to `getOps()`. Functions are curried with `ramda.curry`. In addition to normal currying behaviour, you can use the `ramda` placeholder variable available in `ops.__` to specify parameters you want to pass arguments for later. Example:
+All operations are curried by default. If you don't want them to be curried, pass `{ curried: false }` to `getImmutableOps()`. Functions are curried with `ramda.curry`. In addition to normal currying behaviour, you can use the `ramda` placeholder variable available in `ops.__` to specify parameters you want to pass arguments for later. Example:
 
 ```javascript
 const removeNFromHead = ops.splice(/* startIndex */ 0, /* deleteCount */ops.__, /* valsToAdd */[]);
