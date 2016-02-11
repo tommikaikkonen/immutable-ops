@@ -1,7 +1,11 @@
 immutable-ops
 ===============
 
-A collection of functions to perform immutable operations on plain JavaScript objects and arrays. Aims to have the simplicity and small size of `seamless-immutable`, but with a functional, curried API, no special immutable object type, and batched mutations.
+A collection of functions to perform immutable operations on plain JavaScript objects and arrays.
+
+Like [updeep](https://github.com/substantial/updeep) but with batched mutations and no freezing.
+
+Like [icepick](https://github.com/aearly/icepick), but with batched mutations and a curried API that puts the target object as the last argument. No freezing.
 
 ## Features
 
@@ -16,11 +20,11 @@ A collection of functions to perform immutable operations on plain JavaScript ob
 npm install immutable-ops
 ```
 
-## Usage
+## Example Usage
 
 ```javascript
 import compose from 'ramda/src/compose';
-import getImmutableOps from 'immutable-ops';
+import getOps from 'immutable-ops';
 
 // These are all the available functions.
 const {
@@ -44,78 +48,45 @@ const {
     
     // Placeholder for currying.
     __,
-} = getImmutableOps({
+} = getOps({
     // These are the default options.
     curried: true
 });
 
-const person = {
-    name: 'Tommi',
-    age: 25,
-    location: {
-        city: 'New York',
-        country: 'US',
-    },
-};
+const arr = [1, 2, 3];
 
-// All functions are curried. This returns a function that should be
-// called with the last argument, the object to be operated on.
-const moveToNY = mergeDeep({ location: { city: 'New York' }});
-const moveToSF = mergeDeep({ location: { city: 'San Francisco' }});
+const pushFour = ops.push(4);
+const pushFive = ops.push(5);
 
-const updatedPerson = moveToNY(person);
+// All functions are curried. These functions
+// still need the final argument, the array to
+// operate on.
+expect(pushFive).to.be.a('function');
 
-// If any changes are not made, the same object is returned.
-updatedPerson === person
-// true
+const pushFourAndFive = compose(pushFive, pushFour);
 
-const becomeABanker = setIn('occupation.title', 'Investment Banker');
-const advanceCareer = compose(becomeABanker, moveToNY)
+const result = pushFourAndFive(arr);
+// Two new arrays were created during `pushFourAndFive` eecution.
+expect(result).to.deep.equal([1, 2, 3, 4, 5]);
 
-const personWithJob = advanceCareer(person);
-console.log(personWithJob === person);
-// false
+const batchedPushFourAndFive = ops.batch(pushFourAndFive);
 
-console.log(personWithJob);
-// {
-//   name: 'Tommi',
-//   age: 25,
-//   location: {
-//     city: 'New York',
-//     country: 'US',
-//   },
-//   occupation: {
-//     title: 'Investment Banker',
-//   }
-// }
-
-const runOperations = compose(advanceCareer, moveToSf);
-const personWithJobTwo = ops.batched(() => runOperations(person));
-console.log(person === personWithJobTwo)
-// false
-
-// All data is still immutable. `ops.batched(() => runOperations(person))` returns a deeply equal result to the just running `runOperations(person)`. The difference is in the amount of objects created during `runOperations`. When `moveToSF` is first called, it creates a new object for the `location` key with the updated `city`. When `advanceCareer` calls `moveToNY`, that `location` object is mutated instead of a new one being created.
-console.log(personWithJobTwo);
-// {
-//   name: 'Tommi',
-//   age: 25,
-//   location: {
-//     city: 'New York',
-//     country: 'US',
-//   },
-//   occupation: {
-//     title: 'Investment Banker',
-//   }
-// }
+const sameResult = batchedPushFourAndFive(arr);
+// Only one new array is created during `batchedPushFourAndFive` execution.
+// `immutable-ops` keeps track of objects mutated during the wrapped
+// function, and applies the same operations with mutations to those objects. 
+expect(result).to.deep.equal([1, 2, 3, 4, 5]);
 ```
 
 ## Batched Mutations
 
-You can batch operations by calling `ops.batched(func)` with a function.
+You can run operations in a mutation batch by calling `ops.batched(func)` with a function, and you can create a batch-wrapped function with `const batchedFunc = ops.batch(funcToWrap)`.
 
 When `immutable-ops` creates a new object or array during batched mutations to preserve immutability, it tags it as a mutable object (by adding an unenumerable `@@_____canMutate` property) and pushes its reference to an array of `mutatedObjects`. All consecutive functions applied will execute a mutating operations for objects that have the tag. This applies for tagged objects found in nested structures too.
 
 When the function finishes executing, `immutable-ops` loops through the `mutatedObjects` array, removing the tag properties from each object, and clearing the `mutatedObjects` array.
+
+The overhead of keeping track of mutated objects should be a sufficient tradeoff to creating lots of new objects to applyi multiple consecutive operations, unless you're working on a really big set of data.
 
 ## Currying
 
@@ -129,6 +100,16 @@ const arr = [1, 2, 3];
 console.log(removeTwoFromHead(arr));
 // [3];
 ```
+
+## Batched Mutations API
+
+### batched(functionToRun)
+
+Executes `functionToRun` as a batched mutation and returns the return value of `functionToRun`.`functionToRun` will be called without arguments. During `functionToRun` execution, `immutable-ops` will keep track of new objects created during operations, and apply further operations with mutations to those objects. 
+
+### batch(functionToWrap)
+
+Like `batched`, but returns a function that wraps `functionToWrap` to be executed as a batch. `functionToWrap` is also curried. When `functionToWrap` is executed (all arguments are passed), all operations run during its execution will apply mutations instead of creating new objects whenever possible.
 
 ## Object API
 

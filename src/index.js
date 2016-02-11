@@ -1,6 +1,7 @@
 import forOwn from 'lodash/forOwn';
 import isArrayLike from 'lodash/isArrayLike';
 import curry from 'ramda/src/curry';
+import wrap from 'ramda/src/wrap';
 import placeholder from 'ramda/src/__';
 
 const MUTABILITY_TAG = '@@_______canMutate';
@@ -73,7 +74,7 @@ function mutableSetIn(opts, _pathArg, value, obj) {
 
         if (currType === 'undefined') {
             const newObj = {};
-            prepareNewObject(newObj);
+            prepareNewObject(opts, newObj);
             acc[curr] = newObj;
             return newObj;
         }
@@ -234,10 +235,6 @@ function immutableMerge(isDeep, opts, _mergeObjs, obj) {
         });
     });
 
-    if (hasChanges) {
-        addCanMutateTag(opts, nextObject);
-    }
-
     return nextObject;
 }
 
@@ -311,7 +308,6 @@ function immutableArrSplice(opts, index, deleteCount, _vals, arr) {
     if (canMutate(arr)) return mutableArrSplice(opts, index, deleteCount, _vals, arr);
 
     const vals = forceArray(_vals);
-
     const newArr = arr.slice();
     prepareNewObject(opts, newArr);
     newArr.splice(index, deleteCount, ...vals);
@@ -320,7 +316,7 @@ function immutableArrSplice(opts, index, deleteCount, _vals, arr) {
 }
 
 function immutableArrInsert(opts, index, _vals, arr) {
-    if (canMutate(arr)) return mutableArrInsert(index, _vals, arr);
+    if (canMutate(arr)) return mutableArrInsert(opts, index, _vals, arr);
     return immutableArrSplice(opts, index, 0, _vals, arr);
 }
 
@@ -433,12 +429,18 @@ export default function getImmutableOps(userOpts) {
 
     const boundOperations = bindOperationsToOptions(operations, opts);
 
-    boundOperations.batched = func => {
+    function batchWrapper() {
+        const func = arguments[0];
+        const args = Array.prototype.slice.call(arguments, 1);
         opts.open();
-        const returnValue = func();
+        const returnValue = func.apply(null, args);
         opts.close();
         return returnValue;
-    };
+    }
+
+    boundOperations.batched = batchWrapper;
+
+    boundOperations.batch = wrap(placeholder, batchWrapper);
 
     boundOperations.mutatedObjects = opts.mutatedObjects;
 
