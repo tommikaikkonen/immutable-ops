@@ -26,6 +26,21 @@ describe('operations', () => {
         expect(result).to.deep.equal([1, 2, 3, 4, 5]);
     });
 
+    it('useBatchManager', () => {
+        const myManager = ops.getBatchManager();
+        ops.useBatchManager(myManager);
+
+        const pusher = ops.push(0);
+        const batchOperation = ops.batch((arr) => {
+            const first = pusher(arr);
+            expect(ops.getMutatedObjects()).to.equal(myManager.getMutatedObjects());
+            expect(ops.getMutatedObjects()[0]).to.equal(first);
+            return first;
+        });
+
+        batchOperation([]);
+    });
+
     describe('object', () => {
         describe('batched mutations', () => {
             it('deepMerges', () => {

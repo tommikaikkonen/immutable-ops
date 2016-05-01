@@ -17,9 +17,8 @@ function addCanMutateTag(opts, obj) {
         enumerable: false,
     });
 
-    if (typeof opts.addMutated === 'function') {
-        opts.addMutated(obj);
-    }
+    opts.batchManager.addMutated(obj);
+
     return obj;
 }
 
@@ -29,9 +28,10 @@ function removeCanMutateTag(obj) {
 }
 
 function prepareNewObject(opts, instance) {
-    if (opts.isWithMutations()) {
+    if (opts.batchManager.isWithMutations()) {
         addCanMutateTag(opts, instance);
     }
+    opts.createdObjects++;
     return instance;
 }
 
@@ -383,9 +383,10 @@ function bindOperationsToOptions(opsObj, opts) {
     return boundOperations;
 }
 
-function getMutationManager() {
+function getBatchManager() {
     const previousSessionStack = [];
     let currMutatedObjects = null;
+    let objectsCreated = 0;
 
     return {
         open() {
@@ -401,18 +402,26 @@ function getMutationManager() {
 
         addMutated(obj) {
             currMutatedObjects.push(obj);
+            objectsCreated++;
         },
 
-        mutatedObjects() {
+        getMutatedObjects() {
             return currMutatedObjects;
         },
 
+        getObjectsCreatedCount() {
+            return objectsCreated;
+        },
+
         close() {
-            currMutatedObjects.forEach(removeCanMutateTag);
-            if (previousSessionStack.length) {
-                currMutatedObjects = previousSessionStack.pop();
-            } else {
-                currMutatedObjects = null;
+            if (currMutatedObjects !== null) {
+                currMutatedObjects.forEach(removeCanMutateTag);
+                if (previousSessionStack.length) {
+                    currMutatedObjects = previousSessionStack.pop();
+                } else {
+                    currMutatedObjects = null;
+                }
+                objectsCreated = 0;
             }
         },
     };
@@ -421,30 +430,38 @@ function getMutationManager() {
 export default function getImmutableOps(userOpts) {
     const defaultOpts = {
         curried: true,
+        batchManager: getBatchManager(),
     };
 
-    const baseOpts = Object.assign({}, defaultOpts, (userOpts || {}));
-
-    const opts = Object.assign({}, baseOpts, getMutationManager());
+    const opts = Object.assign({ createdObjects: 0 }, defaultOpts, (userOpts || {}));
 
     const boundOperations = bindOperationsToOptions(operations, opts);
 
     function batchWrapper() {
         const func = arguments[0];
         const args = Array.prototype.slice.call(arguments, 1);
-        opts.open();
+        opts.batchManager.open();
         const returnValue = func.apply(null, args);
-        opts.close();
+        opts.batchManager.close();
         return returnValue;
     }
 
     boundOperations.batched = batchWrapper;
-
     boundOperations.batch = wrap(placeholder, batchWrapper);
-
-    boundOperations.mutatedObjects = opts.mutatedObjects;
-
+    boundOperations.createdObjectsCount = () => opts.createdObjects;
+    boundOperations.getMutatedObjects = opts.batchManager.getMutatedObjects;
     boundOperations.__ = placeholder;
+    boundOperations.open = opts.batchManager.open;
+    boundOperations.close = opts.batchManager.close;
+    boundOperations.getBatchManager = getBatchManager;
+
+    boundOperations.useBatchManager = manager => {
+        opts.batchManager.close();
+        opts.batchManager = manager;
+        boundOperations.open = manager.open;
+        boundOperations.close = manager.close;
+        boundOperations.getMutatedObjects = manager.getMutatedObjects;
+    };
 
     return boundOperations;
 }
