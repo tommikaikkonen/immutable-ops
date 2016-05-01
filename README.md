@@ -44,7 +44,15 @@ const {
     set,
 
     // Batch mutations
+    
+    // Run a function batched
     batched,
+    // Wrap a function to be executed as a batch
+    batch,
+    // Open a batch
+    open,
+    // Close a batch
+    close,
     
     // Placeholder for currying.
     __,
@@ -110,6 +118,14 @@ Executes `functionToRun` as a batched mutation and returns the return value of `
 ### batch(functionToWrap)
 
 Like `batched`, but returns a function that wraps `functionToWrap` to be executed as a batch. `functionToWrap` is also curried. When `functionToWrap` is executed (all arguments are passed), all operations run during its execution will apply mutations instead of creating new objects whenever possible.
+
+### open()
+
+Opens a batch session. From this point on, any operations done through the `ops` instance that `open` was called from will be applied mutatively **if** the object it's operating on was created after opening the session.
+
+### close()
+
+Closes the current batch session.
 
 ## Object API
 
