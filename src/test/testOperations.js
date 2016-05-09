@@ -120,6 +120,27 @@ describe('operations', () => {
                 expect(result).to.not.contain.keys(['age']);
             });
 
+            it('sets a value', () => {
+                const obj = freeze({
+                    one: 1,
+                    two: 500,
+                    three: 3,
+                });
+
+                let result;
+                ops.batched(() => {
+                    result = ops.set('two', 5, obj);
+
+                    expect(canMutate(result)).to.be.true;
+                    result = ops.set('two', 2, result);
+                });
+                expect(result).to.deep.equal({
+                    one: 1,
+                    two: 2,
+                    three: 3,
+                });
+            });
+
             it('sets a value in path', () => {
                 const obj = freeze({
                     first: {
