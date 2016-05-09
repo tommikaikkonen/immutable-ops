@@ -6,6 +6,14 @@ import placeholder from 'ramda/src/__';
 
 const MUTABILITY_TAG = '@@_______canMutate';
 
+function fastArrayCopy(arr) {
+    const copied = new Array(arr.length);
+    for (let i = 0; i < arr.length; i++) {
+        copied[i] = arr[i];
+    }
+    return copied;
+}
+
 export function canMutate(obj) {
     return obj.hasOwnProperty(MUTABILITY_TAG);
 }
@@ -244,7 +252,10 @@ const immutableShallowMerge = immutableMerge.bind(null, false);
 function immutableArrSet(opts, index, value, arr) {
     if (canMutate(arr)) return mutableSet(opts, index, value, arr);
 
-    const newArr = [...arr.slice(0, index), value, ...arr.slice(index + 1)];
+    if (arr[index] === value) return arr;
+
+    const newArr = fastArrayCopy(arr);
+    newArr[index] = value;
     prepareNewObject(opts, newArr);
 
     return newArr;
@@ -263,9 +274,13 @@ function immutableOmit(opts, _keys, obj) {
     if (canMutate(obj)) return mutableOmit(opts, _keys, obj);
 
     const keys = forceArray(_keys);
+    const keysInObj = keys.filter(key => obj.hasOwnProperty(key));
+
+    // None of the keys were in the object, so we can return `obj`.
+    if (keysInObj.length === 0) return obj;
 
     const newObj = Object.assign({}, obj);
-    keys.forEach(key => {
+    keysInObj.forEach(key => {
         delete newObj[key];
     });
     prepareNewObject(opts, newObj);
@@ -327,6 +342,9 @@ function immutableArrPush(opts, vals, arr) {
 function immutableArrFilter(opts, func, arr) {
     if (canMutate(arr)) return mutableArrFilter(opts, func, arr);
     const newArr = arr.filter(func);
+
+    if (newArr.length === arr.length) return arr;
+
     prepareNewObject(opts, newArr);
     return newArr;
 }

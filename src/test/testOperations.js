@@ -187,6 +187,22 @@ describe('operations', () => {
                 expect(result.deeper.change).to.not.equal(baseObj.deeper.change);
             });
 
+            it('deepMerges and returns initial object when no values changed', () => {
+                const baseObj = freeze({
+                    deep: {
+                        dontChange: 'John',
+                    },
+                });
+                const mergeObj = freeze({
+                    deep: {
+                        dontChange: 'John',
+                    },
+                });
+
+                const result = ops.deepMerge(mergeObj, baseObj);
+                expect(result).to.equal(baseObj);
+            });
+
             it('omits a single key', () => {
                 const obj = freeze({
                     name: 'Tommi',
@@ -198,6 +214,16 @@ describe('operations', () => {
 
                 expect(canMutate(result)).to.be.false;
                 expect(result).to.not.contain.keys(['age']);
+            });
+
+            it('omits a single key, returns same object if no value changes', () => {
+                const obj = freeze({
+                    name: 'Tommi',
+                    age: 25,
+                });
+
+                const result = ops.omit('location', obj);
+                expect(result).to.equal(obj);
             });
 
             it('omits an array of keys', () => {
@@ -235,6 +261,22 @@ describe('operations', () => {
                 expect(result.maintain).to.be.true;
                 expect(result.first.maintain).to.be.true;
                 expect(result.first.second.maintain).to.be.true;
+            });
+
+            it('sets a value in path but returns same object if no value changes', () => {
+                const obj = freeze({
+                    first: {
+                        second: {
+                            value: 'value',
+                            maintain: true,
+                        },
+                        maintain: true,
+                    },
+                    maintain: true,
+                });
+
+                const result = ops.setIn('first.second.value', 'value', obj);
+                expect(result).to.equal(obj);
             });
         });
     });
@@ -339,6 +381,12 @@ describe('operations', () => {
                 expect(canMutate(result)).to.be.false;
             });
 
+            it('filter with no effect should return initial array', () => {
+                const arr = freeze([0, 1, 2, 3]);
+                const result = ops.filter(item => item < 4, arr);
+                expect(result).to.equal(arr);
+            });
+
             it('set', () => {
                 const arr = freeze([1, 2, 987, 4]);
 
@@ -347,6 +395,13 @@ describe('operations', () => {
 
                 expect(canMutate(result)).to.be.false;
                 expect(result).to.deep.equal([1, 2, 3, 4]);
+            });
+
+            it('set with no effect should return initial array', () => {
+                const arr = freeze([1, 2, 3, 4]);
+
+                const result = ops.set(2, 3, arr);
+                expect(result).to.equal(arr);
             });
 
             it('splice with deletions', () => {
