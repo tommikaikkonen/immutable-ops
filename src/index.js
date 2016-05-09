@@ -264,8 +264,11 @@ function immutableArrSet(opts, index, value, arr) {
 function immutableSet(opts, key, value, obj) {
     if (isArrayLike(obj)) return immutableArrSet(opts, key, value, obj);
     if (canMutate(obj)) return mutableSet(opts, key, obj);
+
+    if (obj[key] === value) return obj;
+
     const newObj = Object.assign({}, obj);
-    prepareNewObject(newObj);
+    prepareNewObject(opts, newObj);
     newObj[key] = value;
     return newObj;
 }

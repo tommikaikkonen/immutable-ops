@@ -239,6 +239,29 @@ describe('operations', () => {
                 expect(result).to.not.contain.keys(['age']);
             });
 
+            it('sets a value', () => {
+                const obj = freeze({
+                    name: 'Tommi',
+                    age: 25,
+                });
+
+                const result = ops.set('age', 26, obj);
+                expect(result).to.deep.equal({
+                    name: 'Tommi',
+                    age: 26,
+                });
+            });
+
+            it('sets a value and returns the initial value of no changes', () => {
+                const obj = freeze({
+                    name: 'Tommi',
+                    age: 25,
+                });
+
+                const result = ops.set('age', 25, obj);
+                expect(result).to.equal(obj);
+            });
+
             it('sets a value in path', () => {
                 const obj = freeze({
                     first: {
@@ -390,8 +413,7 @@ describe('operations', () => {
             it('set', () => {
                 const arr = freeze([1, 2, 987, 4]);
 
-                const setter = ops.set(2, 3);
-                const result = setter(arr);
+                const result = ops.set(2, 3, arr);
 
                 expect(canMutate(result)).to.be.false;
                 expect(result).to.deep.equal([1, 2, 3, 4]);
