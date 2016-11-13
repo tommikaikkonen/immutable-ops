@@ -1,48 +1,34 @@
 import chai from 'chai';
 import sinonChai from 'sinon-chai';
-import getOps, { canMutate } from '../index';
 import freeze from 'deep-freeze';
-import compose from 'ramda/src/compose';
+
+import { ops, canMutate, getBatchToken } from '../index';
 
 chai.use(sinonChai);
 const { expect } = chai;
 
-describe('operations', () => {
-    let ops;
+describe('batched', () => {
+    it('works', () => {
+        const res = ops.batched(batchOps => {
+            const obj = {};
+            const result = batchOps.set('a', 1, obj);
+            expect(result).to.deep.equal({ a: 1 });
+            expect(result).not.to.equal(obj);
 
-    beforeEach(() => {
-        ops = getOps();
-    });
-
-    it('wrapBatched', () => {
-        const pushFour = ops.push(4);
-        const pushFive = ops.push(5);
-        const arr = freeze([1, 2, 3]);
-
-        const pusher = ops.batch(compose(pushFive, pushFour));
-        expect(pusher).to.be.a('function');
-
-        const result = pusher(arr);
-        expect(result).to.deep.equal([1, 2, 3, 4, 5]);
-    });
-
-    it('useBatchManager', () => {
-        const myManager = ops.getBatchManager();
-        ops.useBatchManager(myManager);
-
-        const pusher = ops.push(0);
-        const batchOperation = ops.batch((arr) => {
-            const first = pusher(arr);
-            expect(ops.getMutatedObjects()).to.equal(myManager.getMutatedObjects());
-            expect(ops.getMutatedObjects()[0]).to.equal(first);
-            return first;
+            const result2 = batchOps.omit('a', result);
+            expect(result2).to.equal(result);
+            expect(result2).to.deep.equal({});
+            return result2;
         });
 
-        batchOperation([]);
+        expect(res).to.deep.equal({});
     });
+});
 
+describe('operations', () => {
     describe('object', () => {
         describe('batched mutations', () => {
+            const token = getBatchToken();
             it('deepMerges', () => {
                 const baseObj = freeze({
                     change: 'Tommi',
@@ -60,16 +46,13 @@ describe('operations', () => {
                         change: 35,
                     },
                 });
-                let result;
-                const merger = ops.deepMerge(mergeObj);
-                ops.batched(() => {
-                    result = merger(baseObj);
-                    expect(canMutate(result)).to.be.true;
-                    expect(canMutate(result.deeper)).to.be.true;
-                });
+                const merger = ops.batch.deepMerge(token, mergeObj);
+                const result = merger(baseObj);
+                expect(canMutate(result, token)).to.be.true;
+                expect(canMutate(result.deeper, token)).to.be.true;
 
-                expect(canMutate(result)).to.be.false;
-                expect(canMutate(result.deeper)).to.be.false;
+                expect(canMutate(result, getBatchToken())).to.be.false;
+                expect(canMutate(result.deeper, getBatchToken())).to.be.false;
 
                 expect(result).to.not.equal(baseObj);
 
@@ -89,16 +72,16 @@ describe('operations', () => {
                     age: 25,
                 });
 
-                let result;
-                const omitter = ops.omit('age');
+                const omitter = ops.batch.omit(token, 'age');
 
-                ops.batched(() => {
-                    result = omitter(obj);
-                    expect(canMutate(result)).to.be.true;
-                });
+                const result = omitter(obj);
+                expect(canMutate(result, token)).to.be.true;
 
-                expect(canMutate(result)).to.be.false;
+                expect(canMutate(result, getBatchToken())).to.be.false;
                 expect(result).to.not.contain.keys(['age']);
+
+                // Further modification should mutate the existing object.
+                expect(ops.batch.omit(token, 'name', result)).to.equal(result);
             });
 
             it('omits an array of keys', () => {
@@ -107,17 +90,16 @@ describe('operations', () => {
                     age: 25,
                 });
 
-                let result;
+                const omitter = ops.batch.omit(token, ['age']);
+                const result = omitter(obj);
 
-                const omitter = ops.omit(['age']);
-                ops.batched(() => {
-                    result = omitter(obj);
+                expect(canMutate(result, token)).to.be.true;
 
-                    expect(canMutate(result)).to.be.true;
-                });
-
-                expect(canMutate(result)).to.be.false;
+                expect(canMutate(result, getBatchToken())).to.be.false;
                 expect(result).to.not.contain.keys(['age']);
+
+                // Further modification should mutate the existing object.
+                expect(ops.batch.omit(token, ['name'], result)).to.equal(result);
             });
 
             it('sets a value', () => {
@@ -127,18 +109,17 @@ describe('operations', () => {
                     three: 3,
                 });
 
-                let result;
-                ops.batched(() => {
-                    result = ops.set('two', 5, obj);
+                const result = ops.batch.set(token, 'two', 5, obj);
 
-                    expect(canMutate(result)).to.be.true;
-                    result = ops.set('two', 2, result);
-                });
-                expect(result).to.deep.equal({
+                expect(canMutate(result, token)).to.be.true;
+                const result2 = ops.batch.set(token, 'two', 2, result);
+                expect(result2).to.deep.equal({
                     one: 1,
                     two: 2,
                     three: 3,
                 });
+
+                expect(result).to.equal(result2);
             });
 
             it('sets a value in path', () => {
@@ -152,22 +133,22 @@ describe('operations', () => {
                     },
                     maintain: true,
                 });
-                let result;
 
-                const setter = ops.setIn('first.second.value', 'anotherValue');
+                const setter = ops.batch.setIn(token, 'first.second.value', 'anotherValue');
 
-                ops.batched(() => {
-                    result = setter(obj);
+                const result = setter(obj);
+                expect(canMutate(result, token)).to.be.true;
 
-                    expect(canMutate(result)).to.be.true;
-                });
-
-                expect(canMutate(result)).to.be.false;
+                expect(canMutate(result, getBatchToken())).to.be.false;
                 expect(result).not.to.equal(obj);
                 expect(result.first.second.value).to.equal('anotherValue');
                 expect(result.maintain).to.be.true;
                 expect(result.first.maintain).to.be.true;
                 expect(result.first.second.maintain).to.be.true;
+
+                const result2 = ops.batch.setIn(token, 'first.second.value', 'secondAnotherValue', result);
+                expect(result).to.equal(result2);
+                expect(result2.first.second.value).to.equal('secondAnotherValue');
             });
         });
 
@@ -325,73 +306,92 @@ describe('operations', () => {
         });
     });
 
-    describe('array', () =>{
+    describe('array', () => {
         describe('batched mutations', () => {
+            const token = getBatchToken();
+
             it('push', () => {
-                const push = ops.push;
+                const push = ops.batch.push;
                 const arr = freeze([5, 4]);
-                const pusher = push(freeze([1, 2, 3]));
-                const result = ops.batched(() => pusher(arr));
+                const pusher = push(token, freeze([1, 2, 3]));
+                const result = pusher(arr);
 
                 expect(result).to.not.equal(arr);
 
                 expect(result).to.deep.equal([5, 4, 1, 2, 3]);
+
+                const result2 = push(token, [4, 5], result);
+                expect(result).to.equal(result2);
+                expect(result2).to.deep.equal([5, 4, 1, 2, 3, 4, 5]);
             });
 
             it('insert', () => {
-                const insert = ops.insert;
+                const insert = ops.batch.insert;
                 const arr = freeze([1, 2, 5]);
-                const inserter = insert(2, freeze([3, 4]));
-                const result = ops.batched(() => inserter(arr));
+                const inserter = insert(token, 2, freeze([3, 4]));
+                const result = inserter(arr);
 
                 expect(result).to.deep.equal([1, 2, 3, 4, 5]);
+
+                const result2 = ops.batch.insert(token, 2, [1000], result);
+                expect(result).to.equal(result2);
+                expect(result2).to.deep.equal([1, 2, 1000, 3, 4, 5]);
             });
 
             it('filter', () => {
                 const arr = freeze([0, 1, 2, 3]);
-                let result;
-
-                ops.batched(() => {
-                    result = ops.filter(item => item % 2 === 0, arr);
-                    expect(canMutate(result)).to.be.true;
-                });
+                const result = ops.batch.filter(token, item => item % 2 === 0, arr);
+                expect(canMutate(result, token)).to.be.true;
 
                 expect(result).to.deep.equal([0, 2]);
-                expect(canMutate(result)).to.be.false;
+                expect(canMutate(result, getBatchToken())).to.be.false;
+
+                const result2 = ops.batch.filter(token, item => item === 2, result);
+                expect(result2).to.equal(result);
+                expect(result2).to.deep.equal([2]);
             });
 
             it('set', () => {
                 const arr = freeze([1, 2, 987, 4]);
 
-                const result = ops.batched(() => {
-                    const setter = ops.set(2, 3);
-                    const res = setter(arr);
-                    expect(canMutate(res)).to.be.true;
-                    return res;
-                });
+                const setter = ops.batch.set(token, 2, 3);
+                const result = setter(arr);
+                expect(canMutate(result, token)).to.be.true;
 
-                expect(canMutate(result)).to.be.false;
+                expect(canMutate(result, getBatchToken())).to.be.false;
                 expect(result).to.deep.equal([1, 2, 3, 4]);
+
+                const result2 = ops.batch.set(token, 2, 1000, result);
+                expect(result).to.equal(result2);
+                expect(result2).to.deep.equal([1, 2, 1000, 4]);
             });
 
             it('splice with deletions', () => {
-                const splice = ops.splice;
+                const splice = ops.batch.splice;
                 const arr = freeze([1, 2, 3, 3, 3, 4]);
-                const splicer = splice(2, 2, []);
+                const splicer = splice(token, 2, 2, []);
 
-                const result = ops.batched(() => splicer(arr));
+                const result = splicer(arr);
 
                 expect(result).to.deep.equal([1, 2, 3, 4]);
+
+                const result2 = ops.batch.splice(token, 2, 1, [], result);
+                expect(result2).to.equal(result);
+                expect(result2).to.deep.equal([1, 2, 4]);
             });
 
             it('splice with additions', () => {
-                const splice = ops.splice;
+                const splice = ops.batch.splice;
                 const arr = freeze([1, 5]);
-                const splicer = splice(1, 0, [2, 3, 4]);
+                const splicer = splice(token, 1, 0, [2, 3, 4]);
 
-                const result = ops.batched(() => splicer(arr));
+                const result = splicer(arr);
 
                 expect(result).to.deep.equal([1, 2, 3, 4, 5]);
+
+                const result2 = ops.batch.splice(token, 0, 1, [1000], result);
+                expect(result).to.equal(result2);
+                expect(result2).to.deep.equal([1000, 2, 3, 4, 5]);
             });
         });
 

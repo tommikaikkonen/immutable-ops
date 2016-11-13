@@ -1,5 +1,5 @@
 {
-  "extends": "airbnb/base",
+  "extends": "airbnb-base",
   "env": {
     "mocha": true
   },
@@ -8,9 +8,26 @@
     "no-unused-vars": 1,
     "id-length": 0,
     "no-unused-expressions": 0,
+    "prefer-rest-params": 0,
+    "no-underscore-dangle": ["warn", { "allowAfterThis": true }],
+    "no-param-reassign": ["error", { "props": false }],
+    "max-len": 1,
+    "prefer-template": 1,
+    "consistent-return": 1,
+    "no-prototype-builtins": 0,
+    "no-restricted-syntax": [
+      "error",
+      "ForOfStatement",
+      "LabeledStatement",
+      "WithStatement"
+    ],
+    "no-plusplus": 0,
+    "arrow-parens": 0,
+    "import/no-extraneous-dependencies": 0
   },
-  "ecmaFeatures": {
-    "restParams": true,
-    "experimentalObjectRestSpread": true
+  "parserOptions": {
+    "ecmaFeatures": {
+      "experimentalObjectRestSpread": true
+    }
   }
 }

@@ -15,19 +15,19 @@
   },
   "license": "MIT",
   "devDependencies": {
-    "babel": "^5.8.24",
-    "babel-core": "^5.8.24",
-    "babel-eslint": "^4.1.5",
-    "chai": "^3.0.0",
+    "babel-cli": "^6.18.0",
+    "babel-core": "^6.18.2",
+    "babel-eslint": "^7.1.0",
+    "chai": "^3.5.0",
     "deep-freeze": "0.0.1",
-    "eslint": "^1.10.1",
-    "eslint-config-airbnb": "1.0.0",
-    "mocha": "^2.2.5",
-    "sinon": "^1.17.2",
+    "eslint": "^3.10.0",
+    "eslint-config-airbnb-base": "10.0.1",
+    "eslint-plugin-import": "^2.2.0",
+    "mocha": "^3.1.2",
+    "sinon": "^1.17.6",
     "sinon-chai": "^2.8.0"
   },
   "dependencies": {
-    "lodash": "^4.2.1",
-    "ramda": "^0.19.1"
+    "ramda": "^0.22.1"
   }
 }

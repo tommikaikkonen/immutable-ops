@@ -1,10 +1,23 @@
-import forOwn from 'lodash/forOwn';
-import isArrayLike from 'lodash/isArrayLike';
 import curry from 'ramda/src/curry';
-import wrap from 'ramda/src/wrap';
 import placeholder from 'ramda/src/__';
 
-const MUTABILITY_TAG = '@@_______canMutate';
+function forOwn(obj, fn) {
+    for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+            fn(obj[key], key);
+        }
+    }
+}
+
+function isArrayLike(value) {
+    return value
+        && typeof value === 'object'
+        && typeof value.length === 'number'
+        && value.length >= 0
+        && value.length % 1 === 0;
+}
+
+const OWNER_ID_TAG = '@@_______immutableOpsOwnerID';
 
 function fastArrayCopy(arr) {
     const copied = new Array(arr.length);
@@ -14,32 +27,31 @@ function fastArrayCopy(arr) {
     return copied;
 }
 
-export function canMutate(obj) {
-    return obj.hasOwnProperty(MUTABILITY_TAG);
+export function canMutate(obj, ownerID) {
+    if (!ownerID) return false;
+    return obj[OWNER_ID_TAG] === ownerID;
 }
 
-function addCanMutateTag(opts, obj) {
-    Object.defineProperty(obj, MUTABILITY_TAG, {
-        value: true,
+const newOwnerID = typeof Symbol === 'function'
+    ? () => Symbol('ownerID')
+    : () => ({});
+
+export const getBatchToken = newOwnerID;
+
+function addOwnerID(obj, ownerID) {
+    Object.defineProperty(obj, OWNER_ID_TAG, {
+        value: ownerID,
         configurable: true,
         enumerable: false,
     });
 
-    opts.batchManager.addMutated(obj);
-
     return obj;
 }
 
-function removeCanMutateTag(obj) {
-    delete obj[MUTABILITY_TAG];
-    return obj;
-}
-
-function prepareNewObject(opts, instance) {
-    if (opts.batchManager.isWithMutations()) {
-        addCanMutateTag(opts, instance);
+function prepareNewObject(instance, ownerID) {
+    if (ownerID) {
+        addOwnerID(instance, ownerID);
     }
-    opts.createdObjects++;
     return instance;
 }
 
@@ -63,12 +75,12 @@ function normalizePath(pathArg) {
     return pathArg;
 }
 
-function mutableSet(opts, key, value, obj) {
+function mutableSet(key, value, obj) {
     obj[key] = value;
     return obj;
 }
 
-function mutableSetIn(opts, _pathArg, value, obj) {
+function mutableSetIn(_pathArg, value, obj) {
     const originalPathArg = normalizePath(_pathArg);
 
     const pathLen = originalPathArg.length;
@@ -82,7 +94,7 @@ function mutableSetIn(opts, _pathArg, value, obj) {
 
         if (currType === 'undefined') {
             const newObj = {};
-            prepareNewObject(opts, newObj);
+            prepareNewObject(newObj, null);
             acc[curr] = newObj;
             return newObj;
         }
@@ -98,7 +110,7 @@ function mutableSetIn(opts, _pathArg, value, obj) {
     return obj;
 }
 
-function valueInPath(opts, _pathArg, obj) {
+function valueInPath(_pathArg, obj) {
     const pathArg = normalizePath(_pathArg);
 
     let acc = obj;
@@ -117,14 +129,21 @@ function valueInPath(opts, _pathArg, obj) {
     }
 }
 
-function immutableSetIn(opts, _pathArg, value, obj) {
+function immutableSetIn(ownerID, _pathArg, value, obj) {
     const pathArg = normalizePath(_pathArg);
 
-    const currentValue = valueInPath(opts, pathArg, obj);
+    const currentValue = valueInPath(pathArg, obj);
     if (value === currentValue) return obj;
 
     const pathLen = pathArg.length;
-    let acc = Object.assign(prepareNewObject(opts, {}), obj);
+
+    let acc;
+    if (canMutate(obj, ownerID)) {
+        acc = obj;
+    } else {
+        acc = Object.assign(prepareNewObject({}, ownerID), obj);
+    }
+
     const rootObj = acc;
 
     pathArg.forEach((curr, idx) => {
@@ -137,10 +156,10 @@ function immutableSetIn(opts, _pathArg, value, obj) {
         const currType = typeof currRef;
 
         if (currType === 'object') {
-            if (canMutate(currRef)) {
+            if (canMutate(currRef, ownerID)) {
                 acc = currRef;
             } else {
-                const newObj = prepareNewObject(opts, {});
+                const newObj = prepareNewObject({}, ownerID);
                 acc[curr] = Object.assign(newObj, currRef);
                 acc = newObj;
             }
@@ -148,7 +167,7 @@ function immutableSetIn(opts, _pathArg, value, obj) {
         }
 
         if (currType === 'undefined') {
-            const newObj = prepareNewObject(opts, {});
+            const newObj = prepareNewObject({}, ownerID);
             acc[curr] = newObj;
             acc = newObj;
             return;
@@ -161,18 +180,16 @@ function immutableSetIn(opts, _pathArg, value, obj) {
     return rootObj;
 }
 
-function mutableMerge(isDeep, opts, _mergeObjs, baseObj) {
+function mutableMerge(isDeep, _mergeObjs, baseObj) {
     const mergeObjs = forceArray(_mergeObjs);
 
-    if (opts.deep) {
+    if (isDeep) {
         mergeObjs.forEach(mergeObj => {
             forOwn(mergeObj, (value, key) => {
                 if (isDeep && baseObj.hasOwnProperty(key)) {
                     let assignValue;
                     if (typeof value === 'object') {
-                        assignValue = canMutate(value)
-                            ? mutableMerge(isDeep, opts, [value], baseObj[key])
-                            : immutableMerge(isDeep, opts, [value], baseObj[key]); // eslint-disable-line
+                        assignValue = mutableMerge(isDeep, [value], baseObj[key]);
                     } else {
                         assignValue = value;
                     }
@@ -193,7 +210,7 @@ function mutableMerge(isDeep, opts, _mergeObjs, baseObj) {
 const mutableShallowMerge = mutableMerge.bind(null, false);
 const mutableDeepMerge = mutableMerge.bind(null, true);
 
-function mutableOmit(opts, _keys, obj) {
+function mutableOmit(_keys, obj) {
     const keys = forceArray(_keys);
     keys.forEach(key => {
         delete obj[key];
@@ -205,8 +222,8 @@ function _shouldMergeKey(obj, other, key) {
     return obj[key] !== other[key];
 }
 
-function immutableMerge(isDeep, opts, _mergeObjs, obj) {
-    if (canMutate(obj)) return mutableMerge(isDeep, opts, _mergeObjs, obj);
+function immutableMerge(isDeep, ownerID, _mergeObjs, obj) {
+    if (canMutate(obj, ownerID)) return mutableMerge(isDeep, _mergeObjs, obj);
     const mergeObjs = forceArray(_mergeObjs);
 
     let hasChanges = false;
@@ -216,7 +233,7 @@ function immutableMerge(isDeep, opts, _mergeObjs, obj) {
         if (!hasChanges) {
             hasChanges = true;
             nextObject = Object.assign({}, obj);
-            prepareNewObject(opts, nextObject);
+            prepareNewObject(nextObject, ownerID);
         }
     };
 
@@ -226,7 +243,7 @@ function immutableMerge(isDeep, opts, _mergeObjs, obj) {
                 const currentValue = nextObject[key];
                 if (typeof mergeValue === 'object' && !(mergeValue instanceof Array)) {
                     if (_shouldMergeKey(nextObject, mergeObj, key)) {
-                        const recursiveMergeResult = immutableMerge(isDeep, opts, mergeValue, currentValue);
+                        const recursiveMergeResult = immutableMerge(isDeep, ownerID, mergeValue, currentValue);
 
                         if (recursiveMergeResult !== currentValue) {
                             willChange();
@@ -249,32 +266,32 @@ function immutableMerge(isDeep, opts, _mergeObjs, obj) {
 const immutableDeepMerge = immutableMerge.bind(null, true);
 const immutableShallowMerge = immutableMerge.bind(null, false);
 
-function immutableArrSet(opts, index, value, arr) {
-    if (canMutate(arr)) return mutableSet(opts, index, value, arr);
+function immutableArrSet(ownerID, index, value, arr) {
+    if (canMutate(arr, ownerID)) return mutableSet(index, value, arr);
 
     if (arr[index] === value) return arr;
 
     const newArr = fastArrayCopy(arr);
     newArr[index] = value;
-    prepareNewObject(opts, newArr);
+    prepareNewObject(newArr, ownerID);
 
     return newArr;
 }
 
-function immutableSet(opts, key, value, obj) {
-    if (isArrayLike(obj)) return immutableArrSet(opts, key, value, obj);
-    if (canMutate(obj)) return mutableSet(opts, key, value, obj);
+function immutableSet(ownerID, key, value, obj) {
+    if (isArrayLike(obj)) return immutableArrSet(ownerID, key, value, obj);
+    if (canMutate(obj, ownerID)) return mutableSet(key, value, obj);
 
     if (obj[key] === value) return obj;
 
     const newObj = Object.assign({}, obj);
-    prepareNewObject(opts, newObj);
+    prepareNewObject(newObj, ownerID);
     newObj[key] = value;
     return newObj;
 }
 
-function immutableOmit(opts, _keys, obj) {
-    if (canMutate(obj)) return mutableOmit(opts, _keys, obj);
+function immutableOmit(ownerID, _keys, obj) {
+    if (canMutate(obj, ownerID)) return mutableOmit(_keys, obj);
 
     const keys = forceArray(_keys);
     const keysInObj = keys.filter(key => obj.hasOwnProperty(key));
@@ -286,17 +303,17 @@ function immutableOmit(opts, _keys, obj) {
     keysInObj.forEach(key => {
         delete newObj[key];
     });
-    prepareNewObject(opts, newObj);
+    prepareNewObject(newObj, ownerID);
     return newObj;
 }
 
-function mutableArrPush(opts, _vals, arr) {
+function mutableArrPush(_vals, arr) {
     const vals = forceArray(_vals);
     arr.push(...vals);
     return arr;
 }
 
-function mutableArrFilter(opts, func, arr) {
+function mutableArrFilter(func, arr) {
     let currIndex = 0;
     let originalIndex = 0;
     while (currIndex < arr.length) {
@@ -312,47 +329,47 @@ function mutableArrFilter(opts, func, arr) {
     return arr;
 }
 
-function mutableArrSplice(opts, index, deleteCount, _vals, arr) {
+function mutableArrSplice(index, deleteCount, _vals, arr) {
     const vals = forceArray(_vals);
     arr.splice(index, deleteCount, ...vals);
     return arr;
 }
 
-function mutableArrInsert(opts, index, _vals, arr) {
-    return mutableArrSplice(opts, index, 0, _vals, arr);
+function mutableArrInsert(index, _vals, arr) {
+    return mutableArrSplice(index, 0, _vals, arr);
 }
 
-function immutableArrSplice(opts, index, deleteCount, _vals, arr) {
-    if (canMutate(arr)) return mutableArrSplice(opts, index, deleteCount, _vals, arr);
+function immutableArrSplice(ownerID, index, deleteCount, _vals, arr) {
+    if (canMutate(arr, ownerID)) return mutableArrSplice(index, deleteCount, _vals, arr);
 
     const vals = forceArray(_vals);
     const newArr = arr.slice();
-    prepareNewObject(opts, newArr);
+    prepareNewObject(newArr, ownerID);
     newArr.splice(index, deleteCount, ...vals);
 
     return newArr;
 }
 
-function immutableArrInsert(opts, index, _vals, arr) {
-    if (canMutate(arr)) return mutableArrInsert(opts, index, _vals, arr);
-    return immutableArrSplice(opts, index, 0, _vals, arr);
+function immutableArrInsert(ownerID, index, _vals, arr) {
+    if (canMutate(arr, ownerID)) return mutableArrInsert(index, _vals, arr);
+    return immutableArrSplice(ownerID, index, 0, _vals, arr);
 }
 
-function immutableArrPush(opts, vals, arr) {
-    return immutableArrInsert(opts, arr.length, vals, arr);
+function immutableArrPush(ownerID, vals, arr) {
+    return immutableArrInsert(ownerID, arr.length, vals, arr);
 }
 
-function immutableArrFilter(opts, func, arr) {
-    if (canMutate(arr)) return mutableArrFilter(opts, func, arr);
+function immutableArrFilter(ownerID, func, arr) {
+    if (canMutate(arr, ownerID)) return mutableArrFilter(func, arr);
     const newArr = arr.filter(func);
 
     if (newArr.length === arr.length) return arr;
 
-    prepareNewObject(opts, newArr);
+    prepareNewObject(newArr, ownerID);
     return newArr;
 }
 
-const operations = {
+const immutableOperations = {
     // object operations
     merge: immutableShallowMerge,
     deepMerge: immutableDeepMerge,
@@ -367,122 +384,70 @@ const operations = {
 
     // both
     set: immutableSet,
-
-    mutable: {
-        // object operations
-        merge: mutableShallowMerge,
-        deepMerge: mutableDeepMerge,
-        omit: mutableOmit,
-        setIn: mutableSetIn,
-
-        // array operations
-        insert: mutableArrInsert,
-        push: mutableArrPush,
-        filter: mutableArrFilter,
-        splice: mutableArrSplice,
-
-        // both
-        set: mutableSet,
-    },
 };
 
-function bindOperationsToOptions(opsObj, opts) {
-    const boundOperations = {};
+const mutableOperations = {
+    // object operations
+    merge: mutableShallowMerge,
+    deepMerge: mutableDeepMerge,
+    omit: mutableOmit,
+    setIn: mutableSetIn,
 
-    forOwn(opsObj, (value, key) => {
-        if (typeof value === 'object') {
-            boundOperations[key] = bindOperationsToOptions(value, opts);
-        } else {
-            boundOperations[key] = value.bind(null, opts);
+    // array operations
+    insert: mutableArrInsert,
+    push: mutableArrPush,
+    filter: mutableArrFilter,
+    splice: mutableArrSplice,
 
-            if (opts.curried) {
-                boundOperations[key] = curry(boundOperations[key]);
-            }
-        }
+    // both
+    set: mutableSet,
+};
+
+
+export function getImmutableOps() {
+    const immutableOps = Object.assign({}, immutableOperations);
+    forOwn(immutableOps, (value, key) => {
+        immutableOps[key] = curry(value.bind(null, null));
     });
 
-    return boundOperations;
-}
+    const mutableOps = Object.assign({}, mutableOperations);
+    forOwn(mutableOps, (value, key) => {
+        mutableOps[key] = curry(value);
+    });
 
-function getBatchManager() {
-    const previousSessionStack = [];
-    let currMutatedObjects = null;
-    let objectsCreated = 0;
+    const batchOps = Object.assign({}, immutableOperations);
+    forOwn(batchOps, (value, key) => {
+        batchOps[key] = curry(value);
+    });
 
-    return {
-        open() {
-            if (currMutatedObjects !== null) {
-                previousSessionStack.push(currMutatedObjects);
-            }
-            currMutatedObjects = [];
-        },
+    function batched(_token, _fn) {
+        let token;
+        let fn;
 
-        isWithMutations() {
-            return currMutatedObjects !== null;
-        },
+        if (typeof _token === 'function') {
+            fn = _token;
+            token = getBatchToken();
+        } else {
+            token = _token;
+            fn = _fn;
+        }
 
-        addMutated(obj) {
-            currMutatedObjects.push(obj);
-            objectsCreated++;
-        },
-
-        getMutatedObjects() {
-            return currMutatedObjects;
-        },
-
-        getObjectsCreatedCount() {
-            return objectsCreated;
-        },
-
-        close() {
-            if (currMutatedObjects !== null) {
-                currMutatedObjects.forEach(removeCanMutateTag);
-                if (previousSessionStack.length) {
-                    currMutatedObjects = previousSessionStack.pop();
-                } else {
-                    currMutatedObjects = null;
-                }
-                objectsCreated = 0;
-            }
-        },
-    };
-}
-
-export default function getImmutableOps(userOpts) {
-    const defaultOpts = {
-        curried: true,
-        batchManager: getBatchManager(),
-    };
-
-    const opts = Object.assign({ createdObjects: 0 }, defaultOpts, (userOpts || {}));
-
-    const boundOperations = bindOperationsToOptions(operations, opts);
-
-    function batchWrapper() {
-        const func = arguments[0];
-        const args = Array.prototype.slice.call(arguments, 1);
-        opts.batchManager.open();
-        const returnValue = func.apply(null, args);
-        opts.batchManager.close();
-        return returnValue;
+        const immutableOpsBoundToToken = Object.assign({}, immutableOperations);
+        forOwn(immutableOpsBoundToToken, (value, key) => {
+            immutableOpsBoundToToken[key] = curry(value.bind(null, token));
+        });
+        return fn(immutableOpsBoundToToken);
     }
 
-    boundOperations.batched = batchWrapper;
-    boundOperations.batch = wrap(placeholder, batchWrapper);
-    boundOperations.createdObjectsCount = () => opts.createdObjects;
-    boundOperations.getMutatedObjects = opts.batchManager.getMutatedObjects;
-    boundOperations.__ = placeholder;
-    boundOperations.open = opts.batchManager.open;
-    boundOperations.close = opts.batchManager.close;
-    boundOperations.getBatchManager = getBatchManager;
-
-    boundOperations.useBatchManager = manager => {
-        opts.batchManager.close();
-        opts.batchManager = manager;
-        boundOperations.open = manager.open;
-        boundOperations.close = manager.close;
-        boundOperations.getMutatedObjects = manager.getMutatedObjects;
-    };
-
-    return boundOperations;
+    return Object.assign(immutableOps, {
+        mutable: mutableOps,
+        batch: batchOps,
+        batched,
+        __: placeholder,
+        getBatchToken,
+    });
 }
+
+export const ops = getImmutableOps();
+
+export default ops;

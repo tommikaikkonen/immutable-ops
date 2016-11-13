@@ -24,7 +24,7 @@ npm install immutable-ops
 
 ```javascript
 import compose from 'ramda/src/compose';
-import getOps from 'immutable-ops';
+import ops from 'immutable-ops';
 
 // These are all the available functions.
 const {
@@ -43,23 +43,9 @@ const {
     // Functions operating on both
     set,
 
-    // Batch mutations
-    
-    // Run a function batched
-    batched,
-    // Wrap a function to be executed as a batch
-    batch,
-    // Open a batch
-    open,
-    // Close a batch
-    close,
-    
     // Placeholder for currying.
     __,
-} = getOps({
-    // These are the default options.
-    curried: true
-});
+} = ops;
 
 const arr = [1, 2, 3];
 
@@ -74,31 +60,71 @@ expect(pushFive).to.be.a('function');
 const pushFourAndFive = compose(pushFive, pushFour);
 
 const result = pushFourAndFive(arr);
-// Two new arrays were created during `pushFourAndFive` eecution.
+// Two new arrays were created during `pushFourAndFive` execution.
 expect(result).to.deep.equal([1, 2, 3, 4, 5]);
 
-const batchedPushFourAndFive = ops.batch(pushFourAndFive);
 
-const sameResult = batchedPushFourAndFive(arr);
-// Only one new array is created during `batchedPushFourAndFive` execution.
-// `immutable-ops` keeps track of objects mutated during the wrapped
-// function, and applies the same operations with mutations to those objects. 
-expect(result).to.deep.equal([1, 2, 3, 4, 5]);
+
+// Only one new array is created.
+const sameResult = ops.batched(batchedOps => {
+    // batchedOps is able to keep track of mutated
+    // objects.
+    return compose(
+        batchedOps.push(5),
+        batchedOps.push(4)
+    )(arr);
+});
+
+expect(sameResult).to.deep.equal([1, 2, 3, 4, 5]);
 ```
 
 ## Batched Mutations
 
-You can run operations in a mutation batch by calling `ops.batched(func)` with a function, and you can create a batch-wrapped function with `const batchedFunc = ops.batch(funcToWrap)`.
+A batch token is supplied by the user at the start of a batch, or created by `immutable-ops`. Each newly created object within a batch is tagged with that token. If a batch using token `X` operates on an object that is tagged with token `X`, it is free to mutate it. You can think of it as an ownership; the batch owns the newly created object and therefore is free to mutate it. New batches use a token `Y` that will never be equal to the previous token.
 
-When `immutable-ops` creates a new object or array during batched mutations to preserve immutability, it tags it as a mutable object (by adding an unenumerable `@@_____canMutate` property) and pushes its reference to an array of `mutatedObjects`. All consecutive functions applied will execute a mutating operations for objects that have the tag. This applies for tagged objects found in nested structures too.
+Tags are not removed; They are assigned to a non-enumerable property `@@_______immutableOpsOwnerID` which should avoid any collisions.
 
-When the function finishes executing, `immutable-ops` loops through the `mutatedObjects` array, removing the tag properties from each object, and clearing the `mutatedObjects` array.
+This token strategy is similar to what ImmutableJS uses to track batches.
 
-The overhead of keeping track of mutated objects should be a sufficient tradeoff to creating lots of new objects to applyi multiple consecutive operations, unless you're working on a really big set of data.
+**Manually using batch tokens**
+
+`ops.batch` gives you access to all the `immutable-ops` functions that take a token as their additional first argument. Otherwise they are identical to the functions found in `ops` directly.
+
+```javascript
+import ops from 'immutable-ops';
+const token = ops.getBatchToken();
+
+// This object has no batch token, since it was not created by immutable-ops.
+const obj = {a: 1, b: 2};
+
+// obj2 is a newly created object tagged with the token.
+const obj2 = ops.batch.set(token, 'a', 10, obj);
+expect(obj).to.not.equal(obj2)
+
+// Because we operate on obj2 that has the same token as
+// we passed to the function, obj2 is mutated.
+const obj3 = ops.batch.set(token, 'b', 20, obj2);
+expect(obj2).to.equal(obj3);
+```
+
+
+**Handling batch tokens implicitly**
+
+```javascript
+import ops from 'immutable-ops';
+
+const obj = {a: 1, b: 2};
+
+const obj3 = ops.batched(batchedOps => {
+    // batchedOps has functions that are bound to a new batch token.
+    const obj2 = batchedOps.set('a', 10, obj);
+    return batchedOps.set('b', 20, obj2);
+});
+```
 
 ## Currying
 
-All operations are curried by default. If you don't want them to be curried, pass `{ curried: false }` to `getImmutableOps()`. Functions are curried with `ramda.curry`. In addition to normal currying behaviour, you can use the `ramda` placeholder variable available in `ops.__` to specify parameters you want to pass arguments for later. Example:
+All operations are curried by default. Functions are curried with `ramda.curry`. In addition to normal currying behaviour, you can use the `ramda` placeholder variable available in `ops.__` to specify parameters you want to pass arguments for later. Example:
 
 ```javascript
 const removeNFromHead = ops.splice(/* startIndex */ 0, /* deleteCount */ops.__, /* valsToAdd */[]);
@@ -108,24 +134,6 @@ const arr = [1, 2, 3];
 console.log(removeTwoFromHead(arr));
 // [3];
 ```
-
-## Batched Mutations API
-
-### batched(functionToRun)
-
-Executes `functionToRun` as a batched mutation and returns the return value of `functionToRun`.`functionToRun` will be called without arguments. During `functionToRun` execution, `immutable-ops` will keep track of new objects created during operations, and apply further operations with mutations to those objects. 
-
-### batch(functionToWrap)
-
-Like `batched`, but returns a function that wraps `functionToWrap` to be executed as a batch. `functionToWrap` is also curried. When `functionToWrap` is executed (all arguments are passed), all operations run during its execution will apply mutations instead of creating new objects whenever possible.
-
-### open()
-
-Opens a batch session. From this point on, any operations done through the `ops` instance that `open` was called from will be applied mutatively **if** the object it's operating on was created after opening the session.
-
-### close()
-
-Closes the current batch session.
 
 ## Object API
 
@@ -310,6 +318,23 @@ console.log(resultObj);
 //     b: 'theB',
 // }
 ```
+
+## Changelog
+
+## 0.5.0: Major Changes
+
+- **BREAKING**: No `getImmutableOps` function, which was the main export, is exported anymore because options were removed. Now the object containing the operation functions is exported directly.
+- **BREAKING**: removed option to choose whether operations are curried. Functions are now always curried.
+- **BREAKING**: former batched mutations API totally replaced.
+- **BREAKING**: batched mutations implementation changed.
+    
+    Previously newly created objects were tagged with a "can mutate" tag, and references to those objects were kept in a list. After the batch was finished, the list was processed by removing the tags from each object in the list.
+
+    Now a batch token is created at the start of a batch (or supplied by the user). Each newly created object is tagged with that token. If a batch using token `X` operates on an object that is tagged with token `X`, it is free to mutate it. New batches use a token `Y` that will never be equal to the previous token.
+
+    Tags are not removed anymore; They are assigned to a non-enumerable property `@@_______immutableOpsOwnerID` which should avoid any collisions.
+
+    This token strategy is similar to what ImmutableJS uses to track batches.
 
 ## License
 
