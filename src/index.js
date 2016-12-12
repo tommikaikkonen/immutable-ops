@@ -84,28 +84,34 @@ function mutableSetIn(_pathArg, value, obj) {
     const originalPathArg = normalizePath(_pathArg);
 
     const pathLen = originalPathArg.length;
-    originalPathArg.reduce((acc, curr, idx) => {
+
+    let done = false;
+    let idx = 0;
+    let acc = obj;
+    let curr = originalPathArg[idx];
+
+    while (!done) {
         if (idx === pathLen - 1) {
             acc[curr] = value;
-            return value;
+            done = true;
+        } else {
+            const currType = typeof acc[curr];
+
+            if (currType === 'undefined') {
+                const newObj = {};
+                prepareNewObject(newObj, null);
+                acc[curr] = newObj;
+            } else if (currType !== 'object') {
+                const pathRepr = `${originalPathArg[idx - 1]}.${curr}`;
+                throw new Error(
+                    `A non-object value was encountered when traversing setIn path at ${pathRepr}.`,
+                );
+            }
+            acc = acc[curr];
+            idx++;
+            curr = originalPathArg[idx];
         }
-
-        const currType = typeof acc[curr];
-
-        if (currType === 'undefined') {
-            const newObj = {};
-            prepareNewObject(newObj, null);
-            acc[curr] = newObj;
-            return newObj;
-        }
-
-        if (currType === 'object') {
-            return acc[curr];
-        }
-
-        const pathRepr = `${originalPathArg[idx - 1]}.${curr}`;
-        throw new Error(`A non-object value was encountered when traversing setIn path at ${pathRepr}.`);
-    });
+    }
 
     return obj;
 }
