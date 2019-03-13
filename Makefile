@@ -1,6 +1,6 @@
 BIN=node_modules/.bin
 
-MOCHA_ARGS= --require ./src/test/testHelper.js
+MOCHA_ARGS= --require @babel/register
 MOCHA_TARGET=src/**/test*.js
 
 clean:
