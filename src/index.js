@@ -1,4 +1,4 @@
-import { curry, placeholder } from 'ramda';
+import { curry, __ as placeholder } from 'ramda';
 
 function forOwn(obj, fn) {
     for (const key in obj) {

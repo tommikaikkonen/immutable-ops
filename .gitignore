@@ -3,6 +3,7 @@ node_modules
 *.sublime-workspace
 .DS_Store
 lib
+es
 .publish
 dist
 min
