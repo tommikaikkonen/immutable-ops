@@ -1,5 +1,4 @@
-import curry from 'ramda/src/curry';
-import placeholder from 'ramda/src/__';
+import { curry, __ as placeholder } from 'ramda';
 
 function forOwn(obj, fn) {
     for (const key in obj) {
@@ -104,7 +103,7 @@ function mutableSetIn(_pathArg, value, obj) {
             } else if (currType !== 'object') {
                 const pathRepr = `${originalPathArg[idx - 1]}.${curr}`;
                 throw new Error(
-                    `A non-object value was encountered when traversing setIn path at ${pathRepr}.`,
+                    `A non-object value was encountered when traversing setIn path at ${pathRepr}.`
                 );
             }
             acc = acc[curr];
@@ -133,6 +132,7 @@ function valueInPath(_pathArg, obj) {
             return undefined;
         }
     }
+    return undefined;
 }
 
 function immutableSetIn(ownerID, _pathArg, value, obj) {
@@ -224,7 +224,7 @@ function mutableOmit(_keys, obj) {
     return obj;
 }
 
-function _shouldMergeKey(obj, other, key) {
+function shouldMergeKey(obj, other, key) {
     return obj[key] !== other[key];
 }
 
@@ -248,8 +248,10 @@ function immutableMerge(isDeep, ownerID, _mergeObjs, obj) {
             if (isDeep && obj.hasOwnProperty(key)) {
                 const currentValue = nextObject[key];
                 if (typeof mergeValue === 'object' && !(mergeValue instanceof Array)) {
-                    if (_shouldMergeKey(nextObject, mergeObj, key)) {
-                        const recursiveMergeResult = immutableMerge(isDeep, ownerID, mergeValue, currentValue);
+                    if (shouldMergeKey(nextObject, mergeObj, key)) {
+                        const recursiveMergeResult = immutableMerge(
+                            isDeep, ownerID, mergeValue, currentValue
+                        );
 
                         if (recursiveMergeResult !== currentValue) {
                             willChange();
@@ -259,10 +261,11 @@ function immutableMerge(isDeep, ownerID, _mergeObjs, obj) {
                     return true; // continue forOwn
                 }
             }
-            if (_shouldMergeKey(nextObject, mergeObj, key)) {
+            if (shouldMergeKey(nextObject, mergeObj, key)) {
                 willChange();
                 nextObject[key] = mergeValue;
             }
+            return undefined;
         });
     });
 

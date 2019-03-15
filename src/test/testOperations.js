@@ -311,7 +311,7 @@ describe('operations', () => {
             const token = getBatchToken();
 
             it('push', () => {
-                const push = ops.batch.push;
+                const { push } = ops.batch;
                 const arr = freeze([5, 4]);
                 const pusher = push(token, freeze([1, 2, 3]));
                 const result = pusher(arr);
@@ -326,14 +326,14 @@ describe('operations', () => {
             });
 
             it('insert', () => {
-                const insert = ops.batch.insert;
+                const { insert } = ops.batch;
                 const arr = freeze([1, 2, 5]);
                 const inserter = insert(token, 2, freeze([3, 4]));
                 const result = inserter(arr);
 
                 expect(result).to.deep.equal([1, 2, 3, 4, 5]);
 
-                const result2 = ops.batch.insert(token, 2, [1000], result);
+                const result2 = insert(token, 2, [1000], result);
                 expect(result).to.equal(result2);
                 expect(result2).to.deep.equal([1, 2, 1000, 3, 4, 5]);
             });
@@ -352,22 +352,23 @@ describe('operations', () => {
             });
 
             it('set', () => {
+                const { set } = ops.batch;
                 const arr = freeze([1, 2, 987, 4]);
 
-                const setter = ops.batch.set(token, 2, 3);
+                const setter = set(token, 2, 3);
                 const result = setter(arr);
                 expect(canMutate(result, token)).to.be.true;
 
                 expect(canMutate(result, getBatchToken())).to.be.false;
                 expect(result).to.deep.equal([1, 2, 3, 4]);
 
-                const result2 = ops.batch.set(token, 2, 1000, result);
+                const result2 = set(token, 2, 1000, result);
                 expect(result).to.equal(result2);
                 expect(result2).to.deep.equal([1, 2, 1000, 4]);
             });
 
             it('splice with deletions', () => {
-                const splice = ops.batch.splice;
+                const { splice } = ops.batch;
                 const arr = freeze([1, 2, 3, 3, 3, 4]);
                 const splicer = splice(token, 2, 2, []);
 
@@ -375,13 +376,13 @@ describe('operations', () => {
 
                 expect(result).to.deep.equal([1, 2, 3, 4]);
 
-                const result2 = ops.batch.splice(token, 2, 1, [], result);
+                const result2 = splice(token, 2, 1, [], result);
                 expect(result2).to.equal(result);
                 expect(result2).to.deep.equal([1, 2, 4]);
             });
 
             it('splice with additions', () => {
-                const splice = ops.batch.splice;
+                const { splice } = ops.batch;
                 const arr = freeze([1, 5]);
                 const splicer = splice(token, 1, 0, [2, 3, 4]);
 
@@ -389,7 +390,7 @@ describe('operations', () => {
 
                 expect(result).to.deep.equal([1, 2, 3, 4, 5]);
 
-                const result2 = ops.batch.splice(token, 0, 1, [1000], result);
+                const result2 = splice(token, 0, 1, [1000], result);
                 expect(result).to.equal(result2);
                 expect(result2).to.deep.equal([1000, 2, 3, 4, 5]);
             });
@@ -397,7 +398,7 @@ describe('operations', () => {
 
         describe('immutable ops', () => {
             it('push', () => {
-                const push = ops.push;
+                const { push } = ops;
                 const arr = freeze([5, 4]);
                 const pusher = push(freeze([1, 2, 3]));
                 const result = pusher(arr);
@@ -408,7 +409,7 @@ describe('operations', () => {
             });
 
             it('insert', () => {
-                const insert = ops.insert;
+                const { insert } = ops;
                 const arr = freeze([1, 2, 5]);
                 const inserter = insert(2, freeze([3, 4]));
                 const result = inserter(arr);
@@ -448,7 +449,7 @@ describe('operations', () => {
             });
 
             it('splice with deletions', () => {
-                const splice = ops.splice;
+                const { splice } = ops;
                 const arr = freeze([1, 2, 3, 3, 3, 4]);
                 const splicer = splice(2, 2, []);
 
@@ -457,7 +458,7 @@ describe('operations', () => {
             });
 
             it('splice with additions', () => {
-                const splice = ops.splice;
+                const { splice } = ops;
                 const arr = freeze([1, 5]);
                 const splicer = splice(1, 0, [2, 3, 4]);
 

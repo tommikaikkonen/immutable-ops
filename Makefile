@@ -1,13 +1,14 @@
 BIN=node_modules/.bin
 
-MOCHA_ARGS= --compilers js:babel-register
+MOCHA_ARGS= --require @babel/register
 MOCHA_TARGET=src/**/test*.js
 
 clean:
-	rm -rf lib
+	rm -rf lib es
 
 build: clean
-	$(BIN)/babel src --out-dir lib
+	BABEL_ENV=cjs $(BIN)/babel src --out-dir lib
+	BABEL_ENV=es $(BIN)/babel src --out-dir es
 
 test: lint
 	NODE_ENV=test $(BIN)/mocha $(MOCHA_ARGS) $(MOCHA_TARGET)
