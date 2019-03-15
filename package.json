@@ -5,7 +5,9 @@
   "main": "lib/index.js",
   "scripts": {
     "test": "make test",
-    "prepublish": "make build"
+    "prepublish": "make build",
+    "build": "make build",
+    "lint": "make lint"
   },
   "keywords": [],
   "author": "Tommi Kaikkonen <tommi.kaikkonen@aalto.fi>",
