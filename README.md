@@ -1,6 +1,12 @@
 immutable-ops
 ===============
 
+[![NPM package](https://img.shields.io/npm/v/immutable-ops.svg?style=flat-square)](https://www.npmjs.com/package/immutable-ops)
+![GitHub Release Date](https://img.shields.io/github/release-date/tommikaikkonen/immutable-ops.svg?style=flat-square)
+![npm bundle size](https://img.shields.io/bundlephobia/minzip/immutable-ops.svg?style=flat-square)
+[![NPM downloads](https://img.shields.io/npm/dm/immutable-ops.svg?style=flat-square)](https://www.npmjs.com/package/immutable-ops)
+![NPM license](https://img.shields.io/npm/l/immutable-ops.svg?style=flat-square)
+
 A collection of functions to perform immutable operations on plain JavaScript objects and arrays.
 
 Like [updeep](https://github.com/substantial/updeep) but with batched mutations and no freezing.
@@ -17,7 +23,7 @@ Like [icepick](https://github.com/aearly/icepick), but with batched mutations an
 ## Installation
 
 ```bash
-npm install immutable-ops
+npm install immutable-ops --save
 ```
 
 ## Example Usage
@@ -338,4 +344,4 @@ console.log(resultObj);
 
 ## License
 
-MIT. See `LICENSE`
+MIT. See [`LICENSE`](https://github.com/tommikaikkonen/immutable-ops/blob/master/LICENSE).
