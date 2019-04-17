@@ -1,6 +1,6 @@
 {
   "name": "immutable-ops",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "A collection of functions to perform immutable operations on plain JavaScript objects",
   "main": "lib/index.js",
   "module": "es/index.js",
